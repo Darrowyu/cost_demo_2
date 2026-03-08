@@ -28,11 +28,11 @@ const loggerConfig = {
   },
 }
 
+import pino from 'pino'
+
 // 创建 Pino 日志实例
 export const createLogger = (env: string = process.env.NODE_ENV || 'development') => {
   const config = env === 'production' ? loggerConfig.production : loggerConfig.development
-  // 动态导入 pino 避免类型问题
-  const pino = require('pino')
   return pino(config)
 }
 

@@ -5,16 +5,15 @@ import swagger from '@fastify/swagger'
 import swaggerUi from '@fastify/swagger-ui'
 import { routes } from './routes/index.js'
 import { errorHandler } from './plugins/error-handler.js'
-import { requestLogger, createLogger } from './plugins/logger.js'
+import { requestLogger } from './plugins/logger.js'
 import cachePlugin from './plugins/cache.js'
 import { closeRedisConnection } from './config/redis.js'
 import type { FastifyRequest, FastifyReply } from 'fastify'
 
-// 创建 Pino 日志实例
-const logger = createLogger(process.env.NODE_ENV)
-
 const app = fastify({
-  logger,
+  logger: {
+    level: process.env.LOG_LEVEL || 'info',
+  },
   genReqId: () => {
     // 生成唯一请求 ID
     return `req-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`

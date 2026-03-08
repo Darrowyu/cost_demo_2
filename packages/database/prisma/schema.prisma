@@ -1,0 +1,343 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ==================== 用户与权限 ====================
+model User {
+  id        String   @id @default(uuid())
+  username  String   @unique
+  password  String   // bcrypt hashed
+  name      String
+  email     String   @unique
+  role      Role     @default(readonly)
+  status    UserStatus @default(active)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  createdQuotations   Quotation[]   @relation("CreatedQuotations")
+  reviewedQuotations  Quotation[]   @relation("ReviewedQuotations")
+  createdCustomers    Customer[]    @relation("CreatedCustomers")
+  updatedCustomers    Customer[]    @relation("UpdatedCustomers")
+  setStandardCosts    StandardCost[] @relation("SetStandardCosts")
+  processedNotifications Notification[] @relation("ProcessedNotifications")
+
+  @@map("users")
+}
+
+enum Role {
+  admin
+  purchaser
+  producer
+  reviewer
+  salesperson
+  readonly
+}
+
+enum UserStatus {
+  active
+  inactive
+}
+
+// ==================== 法规 ====================
+model Regulation {
+  id          String   @id @default(uuid())
+  code        String   @unique
+  name        String
+  description String?
+  status      RegulationStatus @default(active)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  models      Model[]
+  quotations  Quotation[]
+
+  @@map("regulations")
+}
+
+enum RegulationStatus {
+  active
+  inactive
+}
+
+// ==================== 客户 ====================
+model Customer {
+  id          String   @id @default(uuid())
+  code        String   @unique
+  name        String
+  region      String
+  note        String?
+  salesPersonId String? @map("sales_person_id")
+  createdBy   String   @map("created_by")
+  updatedBy   String   @map("updated_by")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  quotations  Quotation[]
+  createdByUser User @relation("CreatedCustomers", fields: [createdBy], references: [id])
+  updatedByUser User @relation("UpdatedCustomers", fields: [updatedBy], references: [id])
+
+  @@map("customers")
+}
+
+// ==================== 原材料 ====================
+model Material {
+  id            String   @id @default(uuid())
+  materialNo    String   @unique @map("material_no")
+  name          String
+  unit          String
+  price         Decimal  @db.Decimal(10, 2)
+  currency      Currency @default(CNY)
+  manufacturer  String?
+  category      String
+  note          String?
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  bomMaterials  BomMaterial[]
+  notifications Notification[]
+
+  @@map("materials")
+}
+
+enum Currency {
+  CNY
+  USD
+}
+
+// ==================== 产品型号 ====================
+model Model {
+  id            String   @id @default(uuid())
+  name          String
+  regulationId  String   @map("regulation_id")
+  category      String
+  series        String
+  imageUrl      String?  @map("image_url")
+  calculationType Json?  @map("calculation_type")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  regulation    Regulation @relation(fields: [regulationId], references: [id])
+  bomMaterials  BomMaterial[]
+  packagingConfigs PackagingConfig[]
+  quotations    Quotation[]
+
+  @@map("models")
+}
+
+// ==================== BOM物料清单 ====================
+model BomMaterial {
+  id         String   @id @default(uuid())
+  modelId    String   @map("model_id")
+  materialId String   @map("material_id")
+  quantity   Decimal  @db.Decimal(10, 4)
+  sortOrder  Int      @map("sort_order")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  model      Model    @relation(fields: [modelId], references: [id], onDelete: Cascade)
+  material   Material @relation(fields: [materialId], references: [id])
+
+  @@unique([modelId, materialId])
+  @@map("bom_materials")
+}
+
+// ==================== 包装配置 ====================
+model PackagingConfig {
+  id            String   @id @default(uuid())
+  modelId       String   @map("model_id")
+  name          String
+  packagingType String   @map("packaging_type")
+  perBox        Int      @map("per_box")     // 每盒数量
+  perCarton     Int      @map("per_carton") // 每箱数量
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  model             Model              @relation(fields: [modelId], references: [id], onDelete: Cascade)
+  processConfigs    ProcessConfig[]
+  packagingMaterials PackagingMaterial[]
+  quotations        Quotation[]
+  standardCosts     StandardCost[]
+
+  @@map("packaging_configs")
+}
+
+// ==================== 工序配置 ====================
+model ProcessConfig {
+  id                 String   @id @default(uuid())
+  packagingConfigId  String   @map("packaging_config_id")
+  name               String
+  price              Decimal  @db.Decimal(10, 4)
+  unit               ProcessUnit
+  sortOrder          Int      @map("sort_order")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  packagingConfig    PackagingConfig @relation(fields: [packagingConfigId], references: [id], onDelete: Cascade)
+
+  @@map("process_configs")
+}
+
+enum ProcessUnit {
+  piece
+  dozen
+}
+
+// ==================== 包材配置 ====================
+model PackagingMaterial {
+  id                 String   @id @default(uuid())
+  packagingConfigId  String   @map("packaging_config_id")
+  name               String
+  quantity           Decimal  @db.Decimal(10, 4)
+  price              Decimal  @db.Decimal(10, 4)
+  boxLength          Decimal? @db.Decimal(10, 2) @map("box_length")
+  boxWidth           Decimal? @db.Decimal(10, 2) @map("box_width")
+  boxHeight          Decimal? @db.Decimal(10, 2) @map("box_height")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  packagingConfig    PackagingConfig @relation(fields: [packagingConfigId], references: [id], onDelete: Cascade)
+
+  @@map("packaging_materials")
+}
+
+// ==================== 报价单 ====================
+model Quotation {
+  id                  String   @id @default(uuid())
+  quotationNo         String   @unique @map("quotation_no")
+  customerId          String   @map("customer_id")
+  regulationId        String   @map("regulation_id")
+  modelId             String   @map("model_id")
+  packagingConfigId   String   @map("packaging_config_id")
+  saleType            SaleType @map("sale_type")
+  shippingType        ShippingType @map("shipping_type")
+  quantity            Int
+
+  // 成本明细
+  materialCost        Decimal  @db.Decimal(12, 2) @map("material_cost")
+  packagingCost       Decimal  @db.Decimal(12, 2) @map("packaging_cost")
+  processCost         Decimal  @db.Decimal(12, 2) @map("process_cost")
+  shippingCost        Decimal  @db.Decimal(12, 2) @map("shipping_cost")
+  adminFee            Decimal  @db.Decimal(12, 2) @map("admin_fee")
+  vat                 Decimal  @db.Decimal(12, 2)
+  totalCost           Decimal  @db.Decimal(12, 2) @map("total_cost")
+
+  status              QuotationStatus @default(draft)
+  createdBy           String   @map("created_by")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+  reviewedBy          String?  @map("reviewed_by")
+  reviewedAt          DateTime? @map("reviewed_at")
+  reviewNote          String?  @map("review_note")
+
+  // Relations
+  customer            Customer @relation(fields: [customerId], references: [id])
+  regulation          Regulation @relation(fields: [regulationId], references: [id])
+  model               Model    @relation(fields: [modelId], references: [id])
+  packagingConfig     PackagingConfig @relation(fields: [packagingConfigId], references: [id])
+  creator             User     @relation("CreatedQuotations", fields: [createdBy], references: [id])
+  reviewer            User?    @relation("ReviewedQuotations", fields: [reviewedBy], references: [id])
+
+  @@map("quotations")
+}
+
+enum QuotationStatus {
+  draft
+  submitted
+  approved
+  rejected
+}
+
+enum SaleType {
+  domestic
+  export
+}
+
+enum ShippingType {
+  fcl20
+  fcl40
+  lcl
+}
+
+// ==================== 标准成本 ====================
+model StandardCost {
+  id                  String   @id @default(uuid())
+  packagingConfigId   String   @map("packaging_config_id")
+  saleType            SaleType @map("sale_type")
+  version             Int
+  isCurrent           Boolean  @default(false) @map("is_current")
+
+  // 成本明细
+  materialCost        Decimal  @db.Decimal(12, 4) @map("material_cost")
+  packagingCost       Decimal  @db.Decimal(12, 4) @map("packaging_cost")
+  processCost         Decimal  @db.Decimal(12, 4) @map("process_cost")
+  shippingCost        Decimal  @db.Decimal(12, 4) @map("shipping_cost")
+  adminFee            Decimal  @db.Decimal(12, 4) @map("admin_fee")
+  vat                 Decimal  @db.Decimal(12, 4)
+  totalCost           Decimal  @db.Decimal(12, 4) @map("total_cost")
+
+  setBy               String   @map("set_by")
+  setAt               DateTime @default(now()) @map("set_at")
+
+  // Relations
+  packagingConfig     PackagingConfig @relation(fields: [packagingConfigId], references: [id], onDelete: Cascade)
+  setByUser           User     @relation("SetStandardCosts", fields: [setBy], references: [id])
+
+  @@unique([packagingConfigId, saleType, isCurrent])
+  @@map("standard_costs")
+}
+
+// ==================== 通知 ====================
+model Notification {
+  id                  String   @id @default(uuid())
+  type                NotificationType
+  status              NotificationStatus @default(pending)
+  materialId          String   @map("material_id")
+  oldPrice            Decimal? @db.Decimal(10, 2) @map("old_price")
+  newPrice            Decimal? @db.Decimal(10, 2) @map("new_price")
+  affectedStandardCosts String[] @map("affected_standard_costs")
+  triggeredBy         String   @map("triggered_by")
+  triggeredAt         DateTime @default(now()) @map("triggered_at")
+  processedBy         String?  @map("processed_by")
+  processedAt         DateTime? @map("processed_at")
+
+  // Relations
+  material            Material @relation(fields: [materialId], references: [id])
+  processor           User?    @relation("ProcessedNotifications", fields: [processedBy], references: [id])
+
+  @@map("notifications")
+}
+
+enum NotificationType {
+  price_change
+  material_delete
+}
+
+enum NotificationStatus {
+  pending
+  processed
+  archived
+}
+
+// ==================== 系统配置 ====================
+model SystemConfig {
+  key   String @id
+  value Json
+  updatedAt DateTime @updatedAt @map("updated_at")
+  updatedBy String?  @map("updated_by")
+
+  @@map("system_config")
+}

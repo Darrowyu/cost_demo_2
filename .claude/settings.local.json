@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cd:*)",
+      "Bash(cp:*)",
+      "Bash(npx prisma:*)",
+      "Bash(npx tsx:*)",
+      "Bash(git:*)",
+      "Bash(wc:*)",
+      "Bash(netstat:*)",
+      "Bash(rm:*)",
+      "Bash(tasklist:*)",
+      "Bash(wmic process:*)",
+      "Bash(npx kill-port:*)"
+    ]
+  }
+}

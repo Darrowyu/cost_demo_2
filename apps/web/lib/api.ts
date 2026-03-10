@@ -192,8 +192,8 @@ export const regulationApi = createCrudApi<
 // 客户 API
 export const customerApi = createCrudApi<Customer, CreateCustomerRequest, UpdateCustomerRequest>('/customers')
 
-// 原材料 API
-export const materialApi = createCrudApi<Material, CreateMaterialRequest, UpdateMaterialRequest>('/materials')
+// 原材料 API - 后端返回扁平结构 { data: Material[], meta }
+export const materialApi = createCrudApi<Material, CreateMaterialRequest, UpdateMaterialRequest, Material[]>('/materials')
 
 // 型号 API
 const modelCrud = createCrudApi<Model, CreateModelRequest, UpdateModelRequest>('/models')

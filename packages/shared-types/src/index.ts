@@ -42,6 +42,7 @@ export interface Material {
   currency: string
   manufacturer?: string
   category?: string
+  note?: string
   createdAt: string
   updatedAt?: string
 }

@@ -55,22 +55,24 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { toast } from 'sonner'
-import { materials } from '@/lib/data'
-import { useListFilters } from '@/hooks/forms/use-filters'
+import { useMaterials } from '@/hooks'
+import type { Material } from '@cost/shared-types'
 
 const categories = ['半面罩类', '口罩类', '配件类', '包装类']
 const units = ['个', '码', 'KG', '套', '卷', '包']
 const currencies = ['CNY', 'USD']
 
 export default function MaterialsPage() {
-  const { searchTerm, setSearchTerm, filters, setFilter, filteredItems: filteredMaterials } = useListFilters(
-    materials,
-    ['materialNo', 'name']
-  )
+  const [searchTerm, setSearchTerm] = useState('')
+  const [categoryFilter, setCategoryFilter] = useState('all')
+  const { materials, isLoading, create, update, delete: deleteMaterial, isCreating, isUpdating, isDeleting } = useMaterials({
+    search: searchTerm,
+    category: categoryFilter === 'all' ? undefined : categoryFilter,
+  })
   const [dialogOpen, setDialogOpen] = useState(false)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [historyDialogOpen, setHistoryDialogOpen] = useState(false)
-  const [editingItem, setEditingItem] = useState<typeof materials[0] | null>(null)
+  const [editingItem, setEditingItem] = useState<Material | null>(null)
   const [formData, setFormData] = useState({
     materialNo: '',
     name: '',
@@ -97,40 +99,55 @@ export default function MaterialsPage() {
     setDialogOpen(true)
   }
 
-  const handleEdit = (item: typeof materials[0]) => {
+  const handleEdit = (item: Material) => {
     setEditingItem(item)
     setFormData({
       materialNo: item.materialNo,
       name: item.name,
       unit: item.unit,
       price: item.price.toString(),
-      currency: item.currency,
+      currency: (item.currency as 'CNY' | 'USD') || 'CNY',
       manufacturer: item.manufacturer || '',
-      category: item.category,
+      category: item.category || '',
       note: item.note || '',
     })
     setDialogOpen(true)
   }
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!formData.materialNo.trim() || !formData.name.trim() || !formData.price) {
       toast.error('请填写完整信息')
       return
     }
-    if (editingItem && parseFloat(formData.price) !== editingItem.price) {
-      toast.success('原料已更新，价格变更通知已生成')
+
+    const data = {
+      materialNo: formData.materialNo.trim(),
+      name: formData.name.trim(),
+      unit: formData.unit,
+      price: parseFloat(formData.price),
+      currency: formData.currency,
+      manufacturer: formData.manufacturer.trim() || undefined,
+      category: formData.category,
+      note: formData.note.trim() || undefined,
+    }
+
+    if (editingItem) {
+      update({ id: editingItem.id, data })
     } else {
-      toast.success(editingItem ? '原料已更新' : '原料已添加')
+      create(data)
     }
     setDialogOpen(false)
   }
 
   const handleDelete = () => {
-    toast.success('原料已删除')
+    if (editingItem) {
+      deleteMaterial(editingItem.id)
+    }
     setDeleteDialogOpen(false)
+    setEditingItem(null)
   }
 
-  const handleViewHistory = (item: typeof materials[0]) => {
+  const handleViewHistory = (item: Material) => {
     setEditingItem(item)
     setHistoryDialogOpen(true)
   }
@@ -169,7 +186,7 @@ export default function MaterialsPage() {
       <Card>
         <CardHeader>
           <CardTitle>原料列表</CardTitle>
-          <CardDescription>共 {filteredMaterials.length} 条记录</CardDescription>
+          <CardDescription>共 {materials.length} 条记录</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="mb-4 flex flex-wrap items-center gap-3">
@@ -182,7 +199,7 @@ export default function MaterialsPage() {
                 className="pl-8"
               />
             </div>
-            <Select value={filters.category || 'all'} onValueChange={(value) => setFilter('category', value)}>
+            <Select value={categoryFilter} onValueChange={setCategoryFilter}>
               <SelectTrigger className="w-[140px]">
                 <Filter className="mr-2 size-4" />
                 <SelectValue placeholder="分类" />
@@ -210,14 +227,20 @@ export default function MaterialsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredMaterials.length === 0 ? (
+                {isLoading ? (
+                  <TableRow>
+                    <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
+                      加载中...
+                    </TableCell>
+                  </TableRow>
+                ) : materials.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
                       暂无数据
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredMaterials.map((item) => (
+                  materials.map((item) => (
                     <TableRow key={item.id}>
                       <TableCell className="font-mono text-sm">{item.materialNo}</TableCell>
                       <TableCell className="font-medium">{item.name}</TableCell>
@@ -376,8 +399,8 @@ export default function MaterialsPage() {
             <Button variant="outline" onClick={() => setDialogOpen(false)}>
               取消
             </Button>
-            <Button onClick={handleSave}>
-              保存
+            <Button onClick={handleSave} disabled={isCreating || isUpdating}>
+              {isCreating || isUpdating ? '保存中...' : '保存'}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -425,9 +448,9 @@ export default function MaterialsPage() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>取消</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-              删除
+            <AlertDialogCancel disabled={isDeleting}>取消</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} disabled={isDeleting} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              {isDeleting ? '删除中...' : '删除'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
